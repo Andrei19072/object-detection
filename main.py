@@ -24,12 +24,93 @@ class Model(nn.Module):
         self.batch_size = 16
 
         self.model = nn.Sequential(  # TODO
-            nn.Linear(self.input_size, 128),
+            #Block 1 (check about BatchNorm2d)
+            nn.Conv2d(3, 64, 7, 2),
+            nn.BatchNorm2d(64),
+            nn.LeakyReLU(),
+            nn.MaxPool2d(2, 2),
+            #nn.LeakyReLU(),
+            
+            #Block 2 (double check 64 or 192 in channels)
+            nn.Conv2d(64, 192, 3),
+            nn.BatchNorm2d(192),
+            nn.LeakyReLU(),
+            nn.MaxPool2d(2, 2),
+            #nn.LeakyReLU(),
+            
+            #Block 3
+            nn.Conv2d(192, 128, 1),
+            nn.BatchNorm2d(128),
+            nn.LeakyReLU(),
+            nn.Conv2d(128, 256, 3),
+            nn.BatchNorm2d(256),
+            nn.LeakyReLU(),
+            nn.Conv2d(256, 256, 1),
+            nn.BatchNorm2d(256),
+            nn.LeakyReLU(),
+            nn.Conv2d(256, 512, 3),
+            nn.BatchNorm2d(512),
+            nn.LeakyReLU(),
+            nn.MaxPool2d(2, 2),
+            #nn.LeakyReLU(),
+            
+            #Block 4
+            nn.Conv2d(512, 256, 1),
+            nn.BatchNorm2d(256),
+            nn.LeakyReLU(),
+            nn.Conv2d(256, 512, 3),
+            nn.BatchNorm2d(512),
+            nn.LeakyReLU(),
+            nn.Conv2d(512, 256, 1),
+            nn.BatchNorm2d(256),
+            nn.LeakyReLU(),
+            nn.Conv2d(256, 512, 3),
+            nn.BatchNorm2d(512),
+            nn.LeakyReLU(),
+            nn.Conv2d(512, 512, 1),
+            nn.BatchNorm2d(512),
+            nn.LeakyReLU(),
+            nn.Conv2d(512, 1024, 3),
+            nn.BatchNorm2d(1024),
+            nn.LeakyReLU(),
+            nn.MaxPool2d(2, 2),
+            #nn.LeakyReLU(),
+            
+            #Block 5
+            nn.Conv2d(1024, 512, 1),
+            nn.BatchNorm2d(512),
+            nn.LeakyReLU(),
+            nn.Conv2d(512, 1024, 3),
+            nn.BatchNorm2d(1024),
+            nn.LeakyReLU(),
+            nn.Conv2d(1024, 512, 1),
+            nn.BatchNorm2d(512),
+            nn.LeakyReLU(),
+            nn.Conv2d(512, 1024, 3),
+            nn.BatchNorm2d(1024),
+            nn.LeakyReLU(),
+            nn.Conv2d(1024, 1024,3),
+            nn.BatchNorm2d(1024),
+            nn.LeakyReLU(),
+            nn.Conv2d(1024, 1024, 3, 2),
+            nn.BatchNorm2d(1024),
+            nn.LeakyReLU(),
+
+            #Block 6
+            nn.Conv2d(1024, 1024, 3),
+            nn.BatchNorm2d(1024),
+            nn.LeakyReLU(),
+            nn.Conv2d(1024, 1024, 3),
+            nn.BatchNorm2d(1024),
+            nn.LeakyReLU(),
+
+            #Connected Layers
+            nn.Flatten(),
+            nn.Linear(7*7*1024, 4096),
+            nn.LeakyReLU(),
+            nn.Linear(4096, 7*7*30),
             nn.Sigmoid(),
-            nn.Linear(128, 32),
-            nn.Sigmoid(),
-            nn.Linear(32, self.output_size),
-            nn.Sigmoid(),
+            nn.Unflatten(1,(7,7,30))
         )
 
         self.loss_function = nn.BCELoss()  # TODO
