@@ -5,9 +5,23 @@ import pandas as pd
 import torch
 from matplotlib import pyplot as plt
 from torch import nn, optim
+<<<<<<< HEAD
 from PIL import Image
+=======
+import json
+import cv2
+from tqdm import tqdm
+import imagesize
+>>>>>>> dd99ae10b36f47b4c71402f59bf6c8de4e01e557
 
 torch.set_default_dtype(torch.float64)
+np.set_printoptions(threshold=np.inf)
+
+IMAGE_WIDTH = 448
+IMAGE_HEIGHT = 448
+S = 30
+B = 2
+CONFIDENCE_THRESHHOLD = 0.5
 
 class Model(nn.Module):
     def __init__(
@@ -40,6 +54,7 @@ class Model(nn.Module):
 
     def _preprocessor(self, x, y=None):
 
+<<<<<<< HEAD
         target_size = (128, 128)  # Replace with the required dimensions
         num_channels = 3  # Replace with the required number of channels
 
@@ -63,6 +78,31 @@ class Model(nn.Module):
 
         # Return the processed images and labels 
         return x_processed, y
+=======
+        # preprocess x
+        ...
+
+        if y:
+            mapping = {}
+            for i in tqdm(range(len(y))):
+                datum = y[i]
+                id = datum["ID"]
+                mapping[id] = np.zeros((S, S, 5))
+                (image_width, image_height) = imagesize.get(f"data/Images/{id}.jpg")
+                for box in datum["gtboxes"]:
+                    if box["tag"] == "person" and not box["extra"].get("ignore"):
+                        [x, y, w, h] = box["vbox"]
+                        x, y, w, h = round(x/image_width * IMAGE_WIDTH), round(y/image_height * IMAGE_HEIGHT), round(w/image_width* IMAGE_WIDTH), round(h/image_height * IMAGE_HEIGHT)
+                        s_x = int(x // (IMAGE_WIDTH / S))
+                        s_y = int(y // (IMAGE_HEIGHT / S))
+                        mapping[id][s_x][s_y][0] = round(x % (IMAGE_WIDTH / S))
+                        mapping[id][s_x][s_y][1] = round(y % (IMAGE_WIDTH / S))
+                        mapping[id][s_x][s_y][2] = w
+                        mapping[id][s_x][s_y][3] = h
+                        mapping[id][s_x][s_y][4] = 1
+
+        return x, y
+>>>>>>> dd99ae10b36f47b4c71402f59bf6c8de4e01e557
 
     def forward(self, x):
         return self.model(x)
@@ -106,16 +146,33 @@ class Model(nn.Module):
     def predict(self, x):
         x, _ = self._preprocessor(x)
         with torch.no_grad():
-            predictions = self.model(x)
-        return predictions.numpy()
+            predictions = self.model(torch.from_numpy(x).double()).detach()
+        people = self.get_people_in_labels(predictions.numpy())
+        return people
 
     def score(self, x, y):
-        x, y = self._preprocessor(x, y)
+        _, y = self._preprocessor(x, y)
 
-        output = self.model(torch.from_numpy(x).double()).detach()
+        predictions = self.predict(x)
+        labels = self.get_people_in_labels(y.numpy())
+        total_error = 0
+        for i in range(len(labels)):
+            total_error += abs(labels[i] - predictions[i]) / labels[i]
 
-        score = ...  # TODO
+        score = total_error / len(labels)
         return score
+    
+    def get_people_in_labels(self, labels):
+        people_arr = np.zeros((labels.shape[0],))
+        for i, label in enumerate(labels):
+            people = 0
+            for i in range(S):
+                for j in range(S):
+                    if label[i][j][4] > CONFIDENCE_THRESHHOLD:
+                        people += 1
+            people_arr[i] = people
+        return people_arr
+            
 
 
 def save_model(trained_model):
@@ -130,8 +187,10 @@ def load_model():
     print("\nLoaded model in model.pickle\n")
     return trained_model
 
-
 def main():
+
+    with open("data/annotation_val.odgt", "r") as f:
+        y = [json.loads(line) for line in filter(None, f.read().split("\n"))]
 
     # TODO
     images_dir = 'data/Images'
