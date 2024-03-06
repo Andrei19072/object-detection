@@ -1,9 +1,11 @@
 import pickle
-
+import os
 import numpy as np
+import pandas as pd
 import torch
 from matplotlib import pyplot as plt
 from torch import nn, optim
+from PIL import Image
 
 torch.set_default_dtype(torch.float64)
 
@@ -37,8 +39,30 @@ class Model(nn.Module):
         self.optimiser = optim.Adam(self.model.parameters(), self.learning_rate)
 
     def _preprocessor(self, x, y=None):
-        # TODO
-        return x, y
+
+        target_size = (128, 128)  # Replace with the required dimensions
+        num_channels = 3  # Replace with the required number of channels
+
+        x_processed = []
+        for img in x:
+            img = Image.open(img).resize(target_size)
+            
+            if num_channels == 1:  # Add a channel dimension if grayscale
+                img = img.convert('L')
+            else:
+                img = img.convert('RGB')
+            img_array = np.asarray(img) / 255.0  # Normalize pixel values
+
+        # If the images are supposed to be greyscale (single-channel), ensure that they have the correct shape
+        if num_channels == 1:
+        # Add an extra dimension to align with 'channels_last' format expected by some frameworks
+            x_processed = x_processed[..., np.newaxis]
+        # Convert the list of processed images to a numpy array
+        x_processed = np.array(x_processed)
+        x_processed.append(img_array)
+
+        # Return the processed images and labels 
+        return x_processed, y
 
     def forward(self, x):
         return self.model(x)
@@ -110,6 +134,14 @@ def load_model():
 def main():
 
     # TODO
+    images_dir = 'data/Images'
+    image_paths = [
+        os.path.join(images_dir, f) for f in os.listdir(images_dir) 
+        if f.endswith(('.png', '.jpg', '.jpeg'))
+    ]
+
+    print(f"Found {len(image_paths)} images")
+
     x = np.asarray([[1, 2, 3], [3, 2, 1]], dtype=np.double)
     y = np.asarray([[0], [1]], dtype=np.double)
     x_val = np.asarray([[1, 2, 3], [3, 2, 1]], dtype=np.double)
