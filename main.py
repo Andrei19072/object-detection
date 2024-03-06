@@ -1,7 +1,7 @@
+import os
 import pickle
 import os
 import numpy as np
-import pandas as pd
 import torch
 from matplotlib import pyplot as plt
 from torch import nn, optim
@@ -12,7 +12,7 @@ from tqdm import tqdm
 import imagesize
 
 torch.set_default_dtype(torch.float64)
-np.set_printoptions(threshold=np.inf)
+# np.set_printoptions(threshold=np.inf)
 
 IMAGE_WIDTH = 448
 IMAGE_HEIGHT = 448
@@ -55,37 +55,30 @@ class Model(nn.Module):
 
         x_processed = []
         for img in x:
-             
-            img = Image.open(img)
-
             # Pad the image to make it square before cropping
             # get the max width / height
-            target_length = max(img.width, img.height)
+            target_length = max(img.shape[0], img.shape[1])
             # resize to the max width / height
-            img = img.resize((target_length, target_length))
+            img.resize((target_length, target_length), refcheck=False)
             # resize to 448 x 448
-            img = cv2.resize(img, (448, 448))
+            img = cv2.resize(img, (IMAGE_WIDTH, IMAGE_HEIGHT))
             
-            if num_channels == 1:  # Add a channel dimension if grayscale
-                img = img.convert('L')
-            else:
-                img = img.convert('RGB')
             img_array = np.asarray(img) / 255.0  # Normalize pixel values
+            x_processed.append(img_array)
 
         # If the images are supposed to be greyscale , ensure that they have the correct shape
         if num_channels == 1:
         # Add an extra dimension to align with 'channels_last' format expected by some frameworks
             x_processed = x_processed[..., np.newaxis]
         # Convert the list of processed images to a numpy array
-        x_processed = np.array(x_processed)
-        x_processed.append(img_array)
+        x_processed = np.asarray(x_processed)
 
+
+        y_processed = np.zeros((len(x), S, S, 5))
         if y:
-            mapping = {}
             for i in tqdm(range(len(y))):
                 datum = y[i]
                 id = datum["ID"]
-                mapping[id] = np.zeros((S, S, 5))
                 (image_width, image_height) = imagesize.get(f"data/Images/{id}.jpg")
                 for box in datum["gtboxes"]:
                     if box["tag"] == "person" and not box["extra"].get("ignore"):
@@ -93,14 +86,23 @@ class Model(nn.Module):
                         x, y, w, h = round(x/image_width * IMAGE_WIDTH), round(y/image_height * IMAGE_HEIGHT), round(w/image_width* IMAGE_WIDTH), round(h/image_height * IMAGE_HEIGHT)
                         s_x = int(x // (IMAGE_WIDTH / S))
                         s_y = int(y // (IMAGE_HEIGHT / S))
-                        mapping[id][s_x][s_y][0] = round(x % (IMAGE_WIDTH / S))
-                        mapping[id][s_x][s_y][1] = round(y % (IMAGE_WIDTH / S))
-                        mapping[id][s_x][s_y][2] = w
-                        mapping[id][s_x][s_y][3] = h
-                        mapping[id][s_x][s_y][4] = 1
+                        if w < y_processed[i][s_x][s_y][2]: # Take largest box per cell
+                            continue
+                        y_processed[i][s_x][s_y][0] = round(x % (IMAGE_WIDTH / S))
+                        y_processed[i][s_x][s_y][1] = round(y % (IMAGE_HEIGHT / S))
+                        y_processed[i][s_x][s_y][2] = w
+                        y_processed[i][s_x][s_y][3] = h
+                        y_processed[i][s_x][s_y][4] = 1
+
+        #x = np.asarray(x)
+        y_processed = np.asarray(y_processed)
+
+        print(y_processed.shape, x_processed.shape)
+
+        exit()
 
         # Return the processed images and labels 
-        return x_processed, y
+        return x_processed, y_processed
 
     def forward(self, x):
         return self.model(x)
@@ -124,7 +126,7 @@ class Model(nn.Module):
             train_loss.backward()
             self.optimiser.step()
 
-            if epoch % 100 == 0:
+            if epoch % 100 == 0 and x_val:
                 with torch.no_grad():
                     indices = np.random.choice(x_val.shape[0], self.batch_size)
                     x_val_batch = torch.from_numpy(x_val[indices])
@@ -144,8 +146,9 @@ class Model(nn.Module):
     def predict(self, x):
         x, _ = self._preprocessor(x)
         with torch.no_grad():
-            predictions = self.model(x)
-        return predictions.numpy()
+            predictions = self.model(torch.from_numpy(x).double()).detach()
+        people = self.get_people_in_labels(predictions.numpy())
+        return people
 
     def score(self, x, y):
         x, y = self._preprocessor(x, y)
@@ -172,30 +175,46 @@ def load_model():
     print("\nLoaded model in model.pickle\n")
     return trained_model
 
+def get_labels(filepath):
+    labels = {}
+    with open(filepath, "r") as f:
+        labels_raw = [json.loads(line) for line in filter(None, f.read().split("\n"))]
+        for label in labels_raw:
+            labels[label["ID"]] = label
+    return labels
+
 
 def main():
 
-    # TODO
-    images_dir = 'data/Images'
-    image_paths = [
-        os.path.join(images_dir, f) for f in os.listdir(images_dir) 
-        if f.endswith(('.png', '.jpg', '.jpeg'))
-    ]
 
-    print(f"Found {len(image_paths)} images")
 
-    x = np.asarray([[1, 2, 3], [3, 2, 1]], dtype=np.double)
-    y = np.asarray([[0], [1]], dtype=np.double)
-    x_val = np.asarray([[1, 2, 3], [3, 2, 1]], dtype=np.double)
-    y_val = np.asarray([[0], [1]], dtype=np.double)
-    x_test = np.asarray([[1, 2, 3], [3, 2, 1]], dtype=np.double)
-    y_test = np.asarray([[0], [1]], dtype=np.double)
+    labels = {}
+    labels = labels | get_labels("data/annotation_val.odgt")
+    labels = labels | get_labels("data/annotation_train.odgt")
 
-    model = Model(x)
+    x = []
+    y = []
+    image_paths = os.listdir("data/Images")[:10]
+    num_images = len(image_paths)
+    print(f"Loading {num_images} images...")
+    for i in tqdm(range(len(image_paths))):
+        image = image_paths[i]
+        im = cv2.imread(f"data/Images/{image}")
+        x.append(im)
+        y.append(labels[image[:-4]])
 
-    train_losses, val_losses = model.fit(x, y, x_val, y_val)
+    x_train = x[:int(num_images * 0.8)]
+    y_train = y[:int(num_images * 0.8)]
+    x_val = x[int(num_images * 0.8):int(num_images * 0.9)]
+    y_val = y[int(num_images * 0.8):int(num_images * 0.9)]
+    x_test = x[int(num_images * 0.9):]
+    y_test = y[int(num_images * 0.9):]
 
-    train_accuracy = model.score(x, y)
+    model = Model(x_train)
+
+    train_losses, val_losses = model.fit(x_train, y_train, x_val, y_val)
+
+    train_accuracy = model.score(x_train, y_train)
     print(f"\nTraining accuracy: {train_accuracy}\n")
 
     val_accuracy = model.score(x_val, y_val)
