@@ -4,8 +4,18 @@ import numpy as np
 import torch
 from matplotlib import pyplot as plt
 from torch import nn, optim
+import json
+import cv2
+from tqdm import tqdm
+import imagesize
 
 torch.set_default_dtype(torch.float64)
+np.set_printoptions(threshold=np.inf)
+
+IMAGE_WIDTH = 448
+IMAGE_HEIGHT = 448
+S = 30
+B = 2
 
 class Model(nn.Module):
     def __init__(
@@ -106,8 +116,34 @@ def load_model():
     print("\nLoaded model in model.pickle\n")
     return trained_model
 
+def get_label_mapping():
+    with open("data/annotation_val.odgt", "r") as f:
+        labels = [json.loads(line) for line in filter(None, f.read().split("\n"))]
+    
+    mapping = {}
+    for i in tqdm(range(len(labels))):
+        datum = labels[i]
+        id = datum["ID"]
+        mapping[id] = np.zeros((S, S, 5))
+        (image_width, image_height) = imagesize.get(f"data/Images/{id}.jpg")
+        for box in datum["gtboxes"]:
+            if box["tag"] == "person" and not box["extra"].get("ignore"):
+                [x, y, w, h] = box["vbox"]
+                x, y, w, h = round(x/image_width * IMAGE_WIDTH), round(y/image_height * IMAGE_HEIGHT), round(w/image_width* IMAGE_WIDTH), round(h/image_height * IMAGE_HEIGHT)
+                s_x = int(x // (IMAGE_WIDTH / S))
+                s_y = int(y // (IMAGE_HEIGHT / S))
+                mapping[id][s_x][s_y][0] = round(x % (IMAGE_WIDTH / S))
+                mapping[id][s_x][s_y][1] = round(y % (IMAGE_WIDTH / S))
+                mapping[id][s_x][s_y][2] = w
+                mapping[id][s_x][s_y][3] = h
+                mapping[id][s_x][s_y][4] = 1
+
+    return mapping
 
 def main():
+
+    mapping = get_label_mapping()
+    print(mapping["284193,e9f000078174b24"])
 
     # TODO
     x = np.asarray([[1, 2, 3], [3, 2, 1]], dtype=np.double)
