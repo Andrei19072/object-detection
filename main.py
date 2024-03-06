@@ -80,6 +80,25 @@ class Model(nn.Module):
         x_processed = np.array(x_processed)
         x_processed.append(img_array)
 
+        if y:
+            mapping = {}
+            for i in tqdm(range(len(y))):
+                datum = y[i]
+                id = datum["ID"]
+                mapping[id] = np.zeros((S, S, 5))
+                (image_width, image_height) = imagesize.get(f"data/Images/{id}.jpg")
+                for box in datum["gtboxes"]:
+                    if box["tag"] == "person" and not box["extra"].get("ignore"):
+                        [x, y, w, h] = box["vbox"]
+                        x, y, w, h = round(x/image_width * IMAGE_WIDTH), round(y/image_height * IMAGE_HEIGHT), round(w/image_width* IMAGE_WIDTH), round(h/image_height * IMAGE_HEIGHT)
+                        s_x = int(x // (IMAGE_WIDTH / S))
+                        s_y = int(y // (IMAGE_HEIGHT / S))
+                        mapping[id][s_x][s_y][0] = round(x % (IMAGE_WIDTH / S))
+                        mapping[id][s_x][s_y][1] = round(y % (IMAGE_WIDTH / S))
+                        mapping[id][s_x][s_y][2] = w
+                        mapping[id][s_x][s_y][3] = h
+                        mapping[id][s_x][s_y][4] = 1
+
         # Return the processed images and labels 
         return x_processed, y
 
@@ -131,9 +150,13 @@ class Model(nn.Module):
     def score(self, x, y):
         x, y = self._preprocessor(x, y)
 
-        output = self.model(torch.from_numpy(x).double()).detach()
+        predictions = self.predict(x)
+        labels = self.get_people_in_labels(y.numpy())
+        total_error = 0
+        for i in range(len(labels)):
+            total_error += abs(labels[i] - predictions[i]) / labels[i]
 
-        score = ...  # TODO
+        score = total_error / len(labels)
         return score
 
 
