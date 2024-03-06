@@ -1,3 +1,4 @@
+import math
 import os
 import pickle
 import os
@@ -14,8 +15,7 @@ import imagesize
 torch.set_default_dtype(torch.float64)
 # np.set_printoptions(threshold=np.inf)
 
-IMAGE_WIDTH = 448
-IMAGE_HEIGHT = 448
+IMAGE_SIZE = 448
 S = 30
 B = 2
 CONFIDENCE_THRESHHOLD = 0.5
@@ -49,19 +49,21 @@ class Model(nn.Module):
 
         self.optimiser = optim.Adam(self.model.parameters(), self.learning_rate)
 
-    def _preprocessor(self, x, y=None):
+    def _preprocessor(self, x_raw, y_raw=None):
 
         num_channels = 3  # Replace with the required number of channels
 
+        metadata = []
         x_processed = []
-        for img in x:
+        for img in x_raw:
             # Pad the image to make it square before cropping
             # get the max width / height
             target_length = max(img.shape[0], img.shape[1])
             # resize to the max width / height
-            img.resize((target_length, target_length), refcheck=False)
+            metadata.append({"offset_y": (target_length - img.shape[0])//2, "offset_x": (target_length - img.shape[1])//2, "scale": target_length / IMAGE_SIZE})
+            img = np.pad(img, (((target_length - img.shape[0])//2, math.ceil((target_length - img.shape[0])//2)), ((target_length - img.shape[1])//2, math.ceil((target_length - img.shape[1])//2)), (0, 0)))
             # resize to 448 x 448
-            img = cv2.resize(img, (IMAGE_WIDTH, IMAGE_HEIGHT))
+            img = cv2.resize(img, (IMAGE_SIZE, IMAGE_SIZE))
             
             img_array = np.asarray(img) / 255.0  # Normalize pixel values
             x_processed.append(img_array)
@@ -74,32 +76,32 @@ class Model(nn.Module):
         x_processed = np.asarray(x_processed)
 
 
-        y_processed = np.zeros((len(x), S, S, 5))
-        if y:
-            for i in tqdm(range(len(y))):
-                datum = y[i]
-                id = datum["ID"]
-                (image_width, image_height) = imagesize.get(f"data/Images/{id}.jpg")
+        y_processed = None
+        if y_raw:
+            y_processed = np.zeros((len(x_raw), S, S, 5))
+            for i, datum in enumerate(y_raw):
                 for box in datum["gtboxes"]:
                     if box["tag"] == "person" and not box["extra"].get("ignore"):
                         [x, y, w, h] = box["vbox"]
-                        x, y, w, h = round(x/image_width * IMAGE_WIDTH), round(y/image_height * IMAGE_HEIGHT), round(w/image_width* IMAGE_WIDTH), round(h/image_height * IMAGE_HEIGHT)
-                        s_x = int(x // (IMAGE_WIDTH / S))
-                        s_y = int(y // (IMAGE_HEIGHT / S))
+                        x += metadata[i]["offset_x"]
+                        y += metadata[i]["offset_y"]
+                        x /= metadata[i]["scale"]
+                        y /= metadata[i]["scale"]
+                        w /= metadata[i]["scale"]
+                        h /= metadata[i]["scale"]
+                        s_x = int(x // (IMAGE_SIZE / S))
+                        s_y = int(y // (IMAGE_SIZE / S))
                         if w < y_processed[i][s_x][s_y][2]: # Take largest box per cell
                             continue
-                        y_processed[i][s_x][s_y][0] = round(x % (IMAGE_WIDTH / S))
-                        y_processed[i][s_x][s_y][1] = round(y % (IMAGE_HEIGHT / S))
+                        y_processed[i][s_x][s_y][0] = round(x % (IMAGE_SIZE / S))
+                        y_processed[i][s_x][s_y][1] = round(y % (IMAGE_SIZE / S))
                         y_processed[i][s_x][s_y][2] = w
                         y_processed[i][s_x][s_y][3] = h
                         y_processed[i][s_x][s_y][4] = 1
 
-        #x = np.asarray(x)
-        y_processed = np.asarray(y_processed)
+            y_processed = np.asarray(y_processed)
 
-        print(y_processed.shape, x_processed.shape)
-
-        exit()
+        print(x_processed.shape, y_processed.shape if y_raw else None)
 
         # Return the processed images and labels 
         return x_processed, y_processed
@@ -115,7 +117,7 @@ class Model(nn.Module):
         val_losses = []
 
         print("Training...")
-        for epoch in range(self.nb_epoch):
+        for epoch in tqdm(range(self.nb_epoch)):
             indices = np.random.choice(x.shape[0], self.batch_size)
             x_batch = torch.from_numpy(x[indices]).double()
             y_batch = torch.from_numpy(y[indices]).double()
