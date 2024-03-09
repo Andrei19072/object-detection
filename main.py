@@ -97,9 +97,9 @@ class Model(nn.Module):
         self.input_size = data.shape[2:4]
         self.output_size = 1
 
-        self.nb_epoch = 1
+        self.nb_epoch = 10
         self.learning_rate = 0.01
-        self.batch_size = 16
+        self.batch_size = 64
 
         self.model = nn.Sequential(
             nn.Conv2d(3, 64, 7, stride=2, padding=3),
@@ -188,7 +188,7 @@ class Model(nn.Module):
             nn.Linear(math.ceil(self.input_size[0]/64) * math.ceil(self.input_size[1] / 64)*1024, 4096),
             nn.LeakyReLU(0.1),
             nn.Linear(4096, S*S*B*5)
-        )
+        ).cuda()
 
         self.loss_function = YoloLoss()
 
