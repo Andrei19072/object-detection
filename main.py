@@ -275,7 +275,7 @@ class Model(nn.Module):
             train_loss.backward()
             self.optimiser.step()
 
-            if epoch % 100 == 0 or True:
+            if epoch % 100 == 0:
                 with torch.no_grad():
                     indices = np.random.choice(x_val.shape[0], self.batch_size)
                     x_val_batch = torch.from_numpy(x_val[indices]).cuda()
