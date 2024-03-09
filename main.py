@@ -296,7 +296,7 @@ class Model(nn.Module):
         x, _ = self._preprocessor(x)
         with torch.no_grad():
             predictions = self.model(torch.from_numpy(x).float().cuda()).detach().view(-1, S, S, B, 5)
-        people = self.get_people_in_labels(1.0 / (1.0 + np.exp(-predictions.numpy())))
+        people = self.get_people_in_labels(1.0 / (1.0 + np.exp(-predictions.cpu().numpy())))
         return people
 
     def score(self, x, y):
