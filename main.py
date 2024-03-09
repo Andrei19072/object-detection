@@ -10,23 +10,22 @@ from PIL import Image
 import json
 import cv2
 from tqdm import tqdm
-import imagesize
 from torch.autograd import Variable
 
-torch.set_default_dtype(torch.float64)
+# torch.set_default_dtype(torch.float64)
 # np.set_printoptions(threshold=np.inf)
 
 IMAGE_SIZE = 448
 S = 30
 B = 2
 CONFIDENCE_THRESHHOLD = 0.5
-cuda = torch.device('cuda') 
+cuda = torch.device('cuda')
 
 class YoloLoss(nn.Module):
     def __init__(self):
         super(YoloLoss, self).__init__()
 
-    def forward(self, y_pred, y_true, use_cuda=False):
+    def forward(self, y_pred, y_true, use_cuda=True):
         SS = S * S
         scale_object_conf = 1
         scale_noobject_conf = 0.5
@@ -99,7 +98,7 @@ class Model(nn.Module):
 
         self.nb_epoch = 10
         self.learning_rate = 0.01
-        self.batch_size = 64
+        self.batch_size = 16
 
         self.model = nn.Sequential(
             nn.Conv2d(3, 64, 7, stride=2, padding=3),
@@ -209,8 +208,8 @@ class Model(nn.Module):
             img = np.pad(img, (((target_length - img.shape[0])//2, math.ceil((target_length - img.shape[0])//2)), ((target_length - img.shape[1])//2, math.ceil((target_length - img.shape[1])//2)), (0, 0)))
             # resize to 448 x 448
             img = cv2.resize(img, (IMAGE_SIZE, IMAGE_SIZE))
-            
-            img_array = np.asarray(img) / 255.0  # Normalize pixel values 
+
+            img_array = np.asarray(img) / 255.0  # Normalize pixel values
             x_processed.append(np.transpose(img_array, (2, 0, 1)))
 
         # If the images are supposed to be greyscale , ensure that they have the correct shape
@@ -251,7 +250,7 @@ class Model(nn.Module):
 
         # print(x_processed.shape, y_processed.shape if y_raw else None)
 
-        # Return the processed images and labels 
+        # Return the processed images and labels
         return x_processed, y_processed
 
     def forward(self, x):
@@ -267,8 +266,8 @@ class Model(nn.Module):
         print("Training...")
         for epoch in tqdm(range(self.nb_epoch)):
             indices = np.random.choice(x.shape[0], self.batch_size)
-            x_batch = torch.from_numpy(x[indices]).double().cuda()
-            y_batch = torch.from_numpy(y[indices]).double().cuda()
+            x_batch = torch.from_numpy(x[indices]).float().cuda()
+            y_batch = torch.from_numpy(y[indices]).float().cuda()
             y_pred = self.model(x_batch)
 
             train_loss = self.loss_function(y_pred, y_batch)
@@ -287,8 +286,8 @@ class Model(nn.Module):
                     train_losses.append(train_loss.item())
                     val_losses.append(val_loss.item())
 
-                    # print(f"Training loss: {train_loss}")
-                    # print(f"Validation loss: {val_loss}")
+                    print(f"Training loss: {train_loss}")
+                    print(f"Validation loss: {val_loss}")
 
         print("\nFinished Training...")
         return train_losses, val_losses
@@ -296,7 +295,7 @@ class Model(nn.Module):
     def predict(self, x):
         x, _ = self._preprocessor(x)
         with torch.no_grad():
-            predictions = self.model(torch.from_numpy(x).double().cuda()).detach().view(-1, S, S, B, 5)
+            predictions = self.model(torch.from_numpy(x).float().cuda()).detach().view(-1, S, S, B, 5)
         people = self.get_people_in_labels(1.0 / (1.0 + np.exp(-predictions.numpy())))
         return people
 
