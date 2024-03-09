@@ -246,12 +246,12 @@ class Model(nn.Module):
                             y_processed[i][s_x][s_y][b][3] = h
                             y_processed[i][s_x][s_y][b][4] = 1
 
-            y_processed = np.asarray(y_processed)
+            y_processed = np.float32(np.asarray(y_processed))
 
         # print(x_processed.shape, y_processed.shape if y_raw else None)
 
         # Return the processed images and labels
-        return x_processed, y_processed
+        return np.float32(x_processed), y_processed
 
     def forward(self, x):
         return self.model(x)
