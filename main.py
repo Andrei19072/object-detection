@@ -20,6 +20,7 @@ IMAGE_SIZE = 448
 S = 30
 B = 2
 CONFIDENCE_THRESHHOLD = 0.5
+cuda = torch.device('cuda') 
 
 class YoloLoss(nn.Module):
     def __init__(self):
@@ -96,9 +97,9 @@ class Model(nn.Module):
         self.input_size = data.shape[2:4]
         self.output_size = 1
 
-        self.nb_epoch = 5
+        self.nb_epoch = 1
         self.learning_rate = 0.01
-        self.batch_size = 64
+        self.batch_size = 16
 
         self.model = nn.Sequential(
             nn.Conv2d(3, 64, 7, stride=2, padding=3),
@@ -266,8 +267,8 @@ class Model(nn.Module):
         print("Training...")
         for epoch in tqdm(range(self.nb_epoch)):
             indices = np.random.choice(x.shape[0], self.batch_size)
-            x_batch = torch.from_numpy(x[indices]).double()
-            y_batch = torch.from_numpy(y[indices]).double()
+            x_batch = torch.from_numpy(x[indices]).double().cuda()
+            y_batch = torch.from_numpy(y[indices]).double().cuda()
             y_pred = self.model(x_batch)
 
             train_loss = self.loss_function(y_pred, y_batch)
@@ -278,8 +279,8 @@ class Model(nn.Module):
             if epoch % 100 == 0 or True:
                 with torch.no_grad():
                     indices = np.random.choice(x_val.shape[0], self.batch_size)
-                    x_val_batch = torch.from_numpy(x_val[indices])
-                    y_val_batch = torch.from_numpy(y_val[indices])
+                    x_val_batch = torch.from_numpy(x_val[indices]).cuda()
+                    y_val_batch = torch.from_numpy(y_val[indices]).cuda()
                     y_val_pred = self.model(x_val_batch)
                     val_loss = self.loss_function(y_val_pred, y_val_batch)
 
@@ -295,7 +296,7 @@ class Model(nn.Module):
     def predict(self, x):
         x, _ = self._preprocessor(x)
         with torch.no_grad():
-            predictions = self.model(torch.from_numpy(x).double()).detach().view(-1, S, S, B, 5)
+            predictions = self.model(torch.from_numpy(x).double().cuda()).detach().view(-1, S, S, B, 5)
         people = self.get_people_in_labels(1.0 / (1.0 + np.exp(-predictions.numpy())))
         return people
 
