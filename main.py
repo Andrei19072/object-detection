@@ -40,7 +40,7 @@ class YoloLoss(nn.Module):
         _areas = _wh[:, :, :, 0] * _wh[:, :, :, 1]
         _upleft = _coord[:, :, :, 0:2]
         _bottomright = _upleft + _wh
-        _confs = torch.sigmoid(y_true[:,:,:,4:])
+        _confs = y_true[:,:,:,4:]
 
         # Extract the coordinate prediction from y_pred
         coords = y_pred[:,:,:,:4].contiguous().view(-1, SS, B, 4)
@@ -96,9 +96,9 @@ class Model(nn.Module):
         self.input_size = data.shape[2:4]
         self.output_size = 1
 
-        self.nb_epoch = 10
-        self.learning_rate = 0.01
-        self.batch_size = 16
+        self.nb_epoch = 1000
+        self.learning_rate = 0.001
+        self.batch_size = 32
 
         self.model = nn.Sequential(
             nn.Conv2d(3, 64, 7, stride=2, padding=3),
@@ -186,7 +186,8 @@ class Model(nn.Module):
             nn.Flatten(),
             nn.Linear(math.ceil(self.input_size[0]/64) * math.ceil(self.input_size[1] / 64)*1024, 4096),
             nn.LeakyReLU(0.1),
-            nn.Linear(4096, S*S*B*5)
+            nn.Linear(4096, S*S*B*5),
+            nn.Sigmoid()
         ).cuda()
 
         self.loss_function = YoloLoss()
@@ -240,10 +241,10 @@ class Model(nn.Module):
                         if w < y_processed[i][s_x][s_y][0][2]: # Take largest box per cell
                             continue
                         for b in range(B):
-                            y_processed[i][s_x][s_y][b][0] = round(x % (IMAGE_SIZE / S))
-                            y_processed[i][s_x][s_y][b][1] = round(y % (IMAGE_SIZE / S))
-                            y_processed[i][s_x][s_y][b][2] = w
-                            y_processed[i][s_x][s_y][b][3] = h
+                            y_processed[i][s_x][s_y][b][0] = (x % (IMAGE_SIZE / S)) / (IMAGE_SIZE / S)
+                            y_processed[i][s_x][s_y][b][1] = (y % (IMAGE_SIZE / S)) / (IMAGE_SIZE / S)
+                            y_processed[i][s_x][s_y][b][2] = w / IMAGE_SIZE
+                            y_processed[i][s_x][s_y][b][3] = h / IMAGE_SIZE
                             y_processed[i][s_x][s_y][b][4] = 1
 
             y_processed = np.float32(np.asarray(y_processed))
@@ -264,7 +265,7 @@ class Model(nn.Module):
         val_losses = []
 
         print("Training...")
-        for epoch in tqdm(range(self.nb_epoch)):
+        for epoch in range(self.nb_epoch):
             indices = np.random.choice(x.shape[0], self.batch_size)
             x_batch = torch.from_numpy(x[indices]).float().cuda()
             y_batch = torch.from_numpy(y[indices]).float().cuda()
@@ -296,7 +297,7 @@ class Model(nn.Module):
         x, _ = self._preprocessor(x)
         with torch.no_grad():
             predictions = self.model(torch.from_numpy(x).float().cuda()).detach().view(-1, S, S, B, 5)
-        people = self.get_people_in_labels(1.0 / (1.0 + np.exp(-predictions.cpu().numpy())))
+        people = self.get_people_in_labels(predictions.cpu().numpy())
         return people
 
     def score(self, x, y):
@@ -355,7 +356,7 @@ def main():
 
     x = []
     y = []
-    image_paths = os.listdir("data/Images")[:50]
+    image_paths = os.listdir("data/Images")
     num_images = len(image_paths)
     print(f"Loading {num_images} images...")
     for i in tqdm(range(len(image_paths))):
@@ -388,6 +389,7 @@ def main():
     plt.plot(val_losses, label="val_loss")
     plt.legend()
     plt.show()
+    plt.savefig("losses.png")
 
     save_model(model)
 
