@@ -359,7 +359,7 @@ def main():
     image_paths = os.listdir("data/Images")
     num_images = len(image_paths)
     print(f"Loading {num_images} images...")
-    for i in tqdm(range(len(image_paths))):
+    for i in range(len(image_paths)):
         image = image_paths[i]
         im = cv2.imread(f"data/Images/{image}")
         x.append(im)
