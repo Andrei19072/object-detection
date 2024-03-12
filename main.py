@@ -239,14 +239,18 @@ class Model(nn.Module):
                         h = math.sqrt(h)
                         s_x = int(x // (IMAGE_SIZE / S))
                         s_y = int(y // (IMAGE_SIZE / S))
-                        if w < y_processed[i][s_x][s_y][0][2]: # Take largest box per cell
+                        b = None
+                        for all_b in range(B):
+                            if w > y_processed[i][s_x][s_y][b][2]:
+                                b = all_b
+                                break
+                        if b is None:
                             continue
-                        for b in range(B):
-                            y_processed[i][s_x][s_y][b][0] = (x % (IMAGE_SIZE / S)) / (IMAGE_SIZE / S)
-                            y_processed[i][s_x][s_y][b][1] = (y % (IMAGE_SIZE / S)) / (IMAGE_SIZE / S)
-                            y_processed[i][s_x][s_y][b][2] = w / IMAGE_SIZE
-                            y_processed[i][s_x][s_y][b][3] = h / IMAGE_SIZE
-                            y_processed[i][s_x][s_y][b][4] = 1
+                        y_processed[i][s_x][s_y][b][0] = (x % (IMAGE_SIZE / S)) / (IMAGE_SIZE / S)
+                        y_processed[i][s_x][s_y][b][1] = (y % (IMAGE_SIZE / S)) / (IMAGE_SIZE / S)
+                        y_processed[i][s_x][s_y][b][2] = w / IMAGE_SIZE
+                        y_processed[i][s_x][s_y][b][3] = h / IMAGE_SIZE
+                        y_processed[i][s_x][s_y][b][4] = 1
 
             y_processed = np.float32(np.asarray(y_processed))
 
