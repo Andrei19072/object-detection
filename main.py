@@ -99,9 +99,9 @@ class Model(nn.Module):
 
         self.output_size = 1
 
-        self.nb_epoch = 1
+        self.nb_epoch = 100
         self.learning_rate = 0.0001
-        self.batch_size = 2
+        self.batch_size = 32
 
         self.model = nn.Sequential(
             nn.Conv2d(3, 64, 7, stride=2, padding=3),
