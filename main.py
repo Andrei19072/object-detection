@@ -20,7 +20,7 @@ IMAGE_SIZE = 448
 S = 30
 B = 2
 CONFIDENCE_THRESHHOLD = 0.5
-cuda = torch.device('cuda')
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 class YoloLoss(nn.Module):
     def __init__(self):
@@ -54,7 +54,7 @@ class YoloLoss(nn.Module):
         intersect_upleft = torch.max(upleft, _upleft)
         intersect_bottomright = torch.min(bottomright, _bottomright)
         intersect_wh = intersect_bottomright - intersect_upleft
-        zeros = Variable(torch.zeros(batch_size, SS, B, 2)).cuda() if use_cuda else Variable(torch.zeros(batch_size, SS, B, 2))
+        zeros = Variable(torch.zeros(batch_size, SS, B, 2)).to(device) if use_cuda else Variable(torch.zeros(batch_size, SS, B, 2))
         intersect_wh = torch.max(intersect_wh, zeros)
         intersect = intersect_wh[:, :, :, 0] * intersect_wh[:, :, :, 1]
 
@@ -189,7 +189,7 @@ class Model(nn.Module):
             nn.LeakyReLU(0.1),
             nn.Linear(4096, S*S*B*5),
             nn.Sigmoid()
-        ).cuda()
+        ).to(device)
 
         self.loss_function = YoloLoss()
 
@@ -268,8 +268,8 @@ class Model(nn.Module):
         print("Training...")
         for epoch in range(self.nb_epoch):
             indices = np.random.choice(x.shape[0], self.batch_size)
-            x_batch = torch.from_numpy(x[indices]).float().cuda()
-            y_batch = torch.from_numpy(y[indices]).float().cuda()
+            x_batch = torch.from_numpy(x[indices]).float().to(device)
+            y_batch = torch.from_numpy(y[indices]).float().to(device)
             y_pred = self.model(x_batch)
 
             train_loss = self.loss_function(y_pred, y_batch)
@@ -280,8 +280,8 @@ class Model(nn.Module):
             if epoch % 10 == 0:
                 with torch.no_grad():
                     indices = np.random.choice(x_val.shape[0], self.batch_size)
-                    x_val_batch = torch.from_numpy(x_val[indices]).cuda()
-                    y_val_batch = torch.from_numpy(y_val[indices]).cuda()
+                    x_val_batch = torch.from_numpy(x_val[indices]).to(device)
+                    y_val_batch = torch.from_numpy(y_val[indices]).to(device)
                     y_val_pred = self.model(x_val_batch)
                     val_loss = self.loss_function(y_val_pred, y_val_batch)
 
@@ -297,7 +297,7 @@ class Model(nn.Module):
     def predict(self, x):
         x, _ = self._preprocessor(x)
         with torch.no_grad():
-            predictions = self.model(torch.from_numpy(x).float().cuda()).detach().view(-1, S, S, B, 5)
+            predictions = self.model(torch.from_numpy(x).float().to(device)).detach().view(-1, S, S, B, 5)
         people = self.get_people_in_labels(predictions.cpu().numpy())
         return people
 
