@@ -2,6 +2,7 @@ import math
 import os
 import pickle
 import os
+import sys
 import numpy as np
 import torch
 from matplotlib import pyplot as plt
@@ -347,9 +348,6 @@ def get_labels(filepath):
 
 
 def main():
-
-
-
     labels = {}
     labels = labels | get_labels("data/annotation_val.odgt")
     labels = labels | get_labels("data/annotation_train.odgt")
@@ -393,6 +391,30 @@ def main():
 
     save_model(model)
 
+def test():
+    model = load_model()
+
+    labels = {}
+    labels = labels | get_labels("data/annotation_val.odgt")
+    labels = labels | get_labels("data/annotation_train.odgt")
+
+    x = []
+    y = []
+    image_paths = os.listdir("data/Images")[:10]
+    num_images = len(image_paths)
+    print(f"Loading {num_images} images...")
+    for i in range(len(image_paths)):
+        image = image_paths[i]
+        im = cv2.imread(f"data/Images/{image}")
+        x.append(im)
+        y.append(labels[image[:-4]])
+
+    train_accuracy = model.score(x, y)
+    print(f"\nInaccuracy: {round(train_accuracy * 100)}%\n")
+
 
 if __name__ == "__main__":
-    main()
+    if "--test" in sys.argv:
+        test()
+    else:
+        main()
