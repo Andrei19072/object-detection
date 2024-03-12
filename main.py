@@ -27,7 +27,7 @@ class YoloLoss(nn.Module):
     def __init__(self):
         super(YoloLoss, self).__init__()
 
-    def forward(self, y_pred, y_true, use_cuda=True):
+    def forward(self, y_pred, y_true):
         SS = S * S
         scale_object_conf = 1
         scale_noobject_conf = 2
@@ -43,6 +43,7 @@ class YoloLoss(nn.Module):
         _upleft = _coord[:, :, :, 0:2]
         _bottomright = _upleft + _wh
         _confs = y_true[:,:,:,4:]
+        p_confs = y_pred[:,:,:,4:]
 
         # Extract the coordinate prediction from y_pred
         coords = y_pred[:,:,:,:4].contiguous().view(-1, SS, B, 4)
@@ -55,7 +56,7 @@ class YoloLoss(nn.Module):
         intersect_upleft = torch.max(upleft, _upleft)
         intersect_bottomright = torch.min(bottomright, _bottomright)
         intersect_wh = intersect_bottomright - intersect_upleft
-        zeros = Variable(torch.zeros(batch_size, SS, B, 2)).to(device) if use_cuda else Variable(torch.zeros(batch_size, SS, B, 2))
+        zeros = Variable(torch.zeros(batch_size, SS, B, 2)).to(device)
         intersect_wh = torch.max(intersect_wh, zeros)
         intersect = intersect_wh[:, :, :, 0] * intersect_wh[:, :, :, 1]
 
@@ -78,10 +79,13 @@ class YoloLoss(nn.Module):
         coord = flatten(_coord)
         cooid = flatten(cooid)
         y_pred = flatten(y_pred)
+        p_coords = flatten(coords)
+        p_confs = flatten(p_confs)
 
         true = torch.cat([coord, confs], 1)
         wght = torch.cat([cooid, conid], 1)
-        loss = torch.pow(y_pred - true, 2)
+        pred = torch.cat([p_coords, p_confs], 1)
+        loss = torch.pow(pred - true, 2)
         loss = loss * wght
         loss = torch.sum(loss, 1)
         return .5 * torch.mean(loss)
@@ -236,8 +240,6 @@ class Model(nn.Module):
                         y /= metadata[i]["scale"]
                         w /= metadata[i]["scale"]
                         h /= metadata[i]["scale"]
-                        w = w
-                        h = h
                         s_x = int(x // (IMAGE_SIZE / S))
                         s_y = int(y // (IMAGE_SIZE / S))
                         b = None
