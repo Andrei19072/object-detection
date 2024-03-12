@@ -2,6 +2,7 @@ import math
 import os
 import pickle
 import os
+import random
 import sys
 import numpy as np
 import torch
@@ -15,7 +16,7 @@ from tqdm import tqdm
 from torch.autograd import Variable
 
 # torch.set_default_dtype(torch.float64)
-np.set_printoptions(threshold=np.inf)
+# np.set_printoptions(threshold=np.inf)
 
 IMAGE_SIZE = 448
 S = 30
@@ -93,18 +94,14 @@ class YoloLoss(nn.Module):
 class Model(nn.Module):
     def __init__(
         self,
-        x,
     ):
         super(Model, self).__init__()
-        data, _ = self._preprocessor(x)
 
-        self.x = x
-        self.input_size = data.shape[2:4]
         self.output_size = 1
 
         self.nb_epoch = 1000
         self.learning_rate = 0.0001
-        self.batch_size = 16
+        self.batch_size = 32
 
         self.model = nn.Sequential(
             nn.Conv2d(3, 64, 7, stride=2, padding=3),
@@ -190,7 +187,7 @@ class Model(nn.Module):
             nn.LeakyReLU(0.1),
 
             nn.Flatten(),
-            nn.Linear(math.ceil(self.input_size[0]/64) * math.ceil(self.input_size[1] / 64)*1024, 4096),
+            nn.Linear(math.ceil(IMAGE_SIZE / 64) * math.ceil(IMAGE_SIZE / 64) * 1024, 4096),
             nn.LeakyReLU(0.1),
             nn.Linear(4096, S*S*B*5),
             nn.Sigmoid()
@@ -206,7 +203,10 @@ class Model(nn.Module):
 
         metadata = []
         x_processed = []
-        for img in x_raw:
+        y_images = []
+        for image in x_raw:
+            y_images.append(image[:-4])
+            img = cv2.imread(f"data/Images/{image}")
             # Pad the image to make it square before cropping
             # get the max width / height
             target_length = max(img.shape[0], img.shape[1])
@@ -230,7 +230,8 @@ class Model(nn.Module):
         y_processed = None
         if y_raw:
             y_processed = np.zeros((len(x_raw), S, S, B, 5))
-            for i, datum in enumerate(y_raw):
+            for i, id in enumerate(y_images):
+                datum = y_raw[id]
                 for box in datum["gtboxes"]:
                     if box["tag"] == "person" and not box["extra"].get("ignore"):
                         [x, y, w, h] = box["vbox"]
@@ -257,26 +258,22 @@ class Model(nn.Module):
 
             y_processed = np.float32(np.asarray(y_processed))
 
-        # print(x_processed.shape, y_processed.shape if y_raw else None)
+        y_processed = torch.from_numpy(y_processed).float().to(device) if y_processed is not None else None
 
         # Return the processed images and labels
-        return np.float32(x_processed), y_processed
+        return torch.from_numpy(np.float32(x_processed)).float().to(device), y_processed
 
     def forward(self, x):
         return self.model(x)
 
-    def fit(self, x, y, x_val=None, y_val=None):
-        x, y = self._preprocessor(x, y)
-        x_val, y_val = self._preprocessor(x_val, y_val)
-
+    def fit(self, x, y, x_val=None):
         train_losses = []
         val_losses = []
 
         print("Training...")
         for epoch in range(self.nb_epoch):
-            indices = np.random.choice(x.shape[0], self.batch_size)
-            x_batch = torch.from_numpy(x[indices]).float().to(device)
-            y_batch = torch.from_numpy(y[indices]).float().to(device)
+            x_batch = random.sample(x, self.batch_size)
+            x_batch, y_batch = self._preprocessor(x_batch, y)
             y_pred = self.model(x_batch)
 
             train_loss = self.loss_function(y_pred, y_batch)
@@ -286,9 +283,8 @@ class Model(nn.Module):
 
             if epoch % 10 == 0:
                 with torch.no_grad():
-                    indices = np.random.choice(x_val.shape[0], self.batch_size)
-                    x_val_batch = torch.from_numpy(x_val[indices]).to(device)
-                    y_val_batch = torch.from_numpy(y_val[indices]).to(device)
+                    x_val_batch = random.sample(x_val, self.batch_size)
+                    x_val_batch, y_val_batch = self._preprocessor(x_val_batch, y)
                     y_val_pred = self.model(x_val_batch)
                     val_loss = self.loss_function(y_val_pred, y_val_batch)
 
@@ -304,7 +300,7 @@ class Model(nn.Module):
     def predict(self, x, debug=False):
         x, _ = self._preprocessor(x)
         with torch.no_grad():
-            predictions = self.model(torch.from_numpy(x).float().to(device)).detach().view(-1, S, S, B, 5)
+            predictions = self.model(x).detach().view(-1, S, S, B, 5)
         people = self.get_people_in_labels(predictions.cpu().numpy(), debug=debug)
         return people
 
@@ -371,35 +367,32 @@ def main():
     labels = labels | get_labels("data/annotation_val.odgt")
     labels = labels | get_labels("data/annotation_train.odgt")
 
-    x = []
-    y = []
-    image_paths = os.listdir("data/Images")[:100]
+    y = labels
+    image_paths = os.listdir("data/Images")
     num_images = len(image_paths)
-    print(f"Loading {num_images} images...")
-    for i in range(len(image_paths)):
-        image = image_paths[i]
-        im = cv2.imread(f"data/Images/{image}")
-        x.append(im)
-        y.append(labels[image[:-4]])
 
-    x_train = x[:int(num_images * 0.8)]
-    y_train = y[:int(num_images * 0.8)]
-    x_val = x[int(num_images * 0.8):int(num_images * 0.9)]
-    y_val = y[int(num_images * 0.8):int(num_images * 0.9)]
-    x_test = x[int(num_images * 0.9):]
-    y_test = y[int(num_images * 0.9):]
+    x_train = image_paths[:int(num_images * 0.8)]
+    x_val = image_paths[int(num_images * 0.8):int(num_images * 0.9)]
+    x_test = image_paths[int(num_images * 0.9):]
 
-    model = Model(x_train)
+    # x_train = x[:int(num_images * 0.8)]
+    # y_train = y[:int(num_images * 0.8)]
+    # x_val = x[int(num_images * 0.8):int(num_images * 0.9)]
+    # y_val = y[int(num_images * 0.8):int(num_images * 0.9)]
+    # x_test = x[int(num_images * 0.9):]
+    # y_test = y[int(num_images * 0.9):]
 
-    train_losses, val_losses = model.fit(x_train, y_train, x_val, y_val)
+    model = Model()
 
-    train_accuracy = model.score(x_train, y_train)
+    train_losses, val_losses = model.fit(x_train, y, x_val)
+
+    train_accuracy = model.score(x_train[:100], y)
     print(f"\nTraining inaccuracy: {round(train_accuracy * 100)}%\n")
 
-    val_accuracy = model.score(x_val, y_val)
+    val_accuracy = model.score(x_val[:100], y)
     print(f"\nValidation inaccuracy: {round(val_accuracy * 100)}%\n")
 
-    test_accuracy = model.score(x_test, y_test)
+    test_accuracy = model.score(x_test[:100], y)
     print(f"\nTest inaccuracy: {round(test_accuracy * 100)}%\n")
 
     plt.plot(train_losses, label="train_loss")
