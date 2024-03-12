@@ -99,7 +99,7 @@ class Model(nn.Module):
 
         self.output_size = 1
 
-        self.nb_epoch = 100
+        self.nb_epoch = 1000
         self.learning_rate = 0.0001
         self.batch_size = 32
 
@@ -240,6 +240,10 @@ class Model(nn.Module):
                         h /= metadata[i]["scale"]
                         s_x = int(x // (IMAGE_SIZE / S))
                         s_y = int(y // (IMAGE_SIZE / S))
+                        if s_x >= 30:
+                            s_x = 29
+                        if s_y >= 30:
+                            s_y = 29
                         b = None
                         for all_b in range(B):
                             if w > y_processed[i][s_x][s_y][all_b][2]:
@@ -269,7 +273,7 @@ class Model(nn.Module):
 
         print("Training...")
         for epoch in range(self.nb_epoch):
-            x_batch = random.sample(x, self.batch_size)
+            x_batch = random.choices(x, k=self.batch_size)
             x_batch, y_batch = self._preprocessor(x_batch, y)
             y_pred = self.model(x_batch)
 
@@ -280,7 +284,7 @@ class Model(nn.Module):
 
             if epoch % 10 == 0:
                 with torch.no_grad():
-                    x_val_batch = random.sample(x_val, self.batch_size)
+                    x_val_batch = random.choices(x_val, k=self.batch_size)
                     x_val_batch, y_val_batch = self._preprocessor(x_val_batch, y)
                     y_val_pred = self.model(x_val_batch)
                     val_loss = self.loss_function(y_val_pred, y_val_batch)
