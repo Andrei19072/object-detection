@@ -5,6 +5,7 @@ import os
 import sys
 import numpy as np
 import torch
+import io
 from matplotlib import pyplot as plt
 from torch import nn, optim
 from PIL import Image
@@ -14,7 +15,7 @@ from tqdm import tqdm
 from torch.autograd import Variable
 
 # torch.set_default_dtype(torch.float64)
-# np.set_printoptions(threshold=np.inf)
+np.set_printoptions(threshold=np.inf)
 
 IMAGE_SIZE = 448
 S = 30
@@ -29,8 +30,8 @@ class YoloLoss(nn.Module):
     def forward(self, y_pred, y_true, use_cuda=True):
         SS = S * S
         scale_object_conf = 1
-        scale_noobject_conf = 0.5
-        scale_coordinate = 5
+        scale_noobject_conf = 2
+        scale_coordinate = 1
         batch_size = y_pred.size(0)
 
         # ground truth
@@ -78,8 +79,8 @@ class YoloLoss(nn.Module):
         cooid = flatten(cooid)
         y_pred = flatten(y_pred)
 
-        true = torch.cat([confs, coord], 1)
-        wght = torch.cat([conid, cooid], 1)
+        true = torch.cat([coord, confs], 1)
+        wght = torch.cat([cooid, conid], 1)
         loss = torch.pow(y_pred - true, 2)
         loss = loss * wght
         loss = torch.sum(loss, 1)
@@ -298,18 +299,20 @@ class Model(nn.Module):
         print("\nFinished Training...")
         return train_losses, val_losses
 
-    def predict(self, x):
+    def predict(self, x, debug=False):
         x, _ = self._preprocessor(x)
         with torch.no_grad():
             predictions = self.model(torch.from_numpy(x).float().to(device)).detach().view(-1, S, S, B, 5)
-        people = self.get_people_in_labels(predictions.cpu().numpy())
+        people = self.get_people_in_labels(predictions.cpu().numpy(), debug=debug)
         return people
 
-    def score(self, x, y):
+    def score(self, x, y, debug=False):
         _, y = self._preprocessor(x, y)
 
-        predictions = self.predict(x)
-        labels = self.get_people_in_labels(y)
+        predictions = self.predict(x, debug=debug)
+        if debug:
+            print("\n--------\n")
+        labels = self.get_people_in_labels(y, debug=debug)
         total_error = 0
         for i in range(len(labels)):
             total_error += abs(labels[i] - predictions[i]) / labels[i]
@@ -317,7 +320,7 @@ class Model(nn.Module):
         score = total_error / len(labels)
         return score
 
-    def get_people_in_labels(self, labels):
+    def get_people_in_labels(self, labels, debug=False):
         people_arr = np.zeros((labels.shape[0],))
         for index, label in enumerate(labels):
             people = 0
@@ -325,10 +328,17 @@ class Model(nn.Module):
                 for j in range(S):
                     for b in range(B):
                         if label[i][j][b][4] > CONFIDENCE_THRESHHOLD:
+                            if debug:
+                                print(i, j, b, label[i][j][b][4])
                             people += 1
             people_arr[index] = people
         return people_arr
 
+class CPU_Unpickler(pickle.Unpickler):
+    def find_class(self, module, name):
+        if module == 'torch.storage' and name == '_load_from_bytes':
+            return lambda b: torch.load(io.BytesIO(b), map_location='cpu')
+        else: return super().find_class(module, name)
 
 def save_model(trained_model):
     with open("model.pickle", "wb") as target:
@@ -338,7 +348,10 @@ def save_model(trained_model):
 
 def load_model():
     with open("model.pickle", "rb") as target:
-        trained_model = pickle.load(target)
+        if device == "cuda":
+            trained_model = pickle.load(target)
+        else:
+            trained_model = CPU_Unpickler(target).load()
     print("\nLoaded model in model.pickle\n")
     return trained_model
 
@@ -404,7 +417,8 @@ def test():
 
     x = []
     y = []
-    image_paths = os.listdir("data/Images")[:10]
+    image_paths = os.listdir("data/Images")[1:2]
+    print(image_paths)
     num_images = len(image_paths)
     print(f"Loading {num_images} images...")
     for i in range(len(image_paths)):
@@ -413,7 +427,7 @@ def test():
         x.append(im)
         y.append(labels[image[:-4]])
 
-    train_accuracy = model.score(x, y)
+    train_accuracy = model.score(x, y, debug=True)
     print(f"\nInaccuracy: {round(train_accuracy * 100)}%\n")
 
 
