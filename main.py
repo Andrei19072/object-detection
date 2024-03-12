@@ -38,7 +38,7 @@ class YoloLoss(nn.Module):
         y_true = y_true.view(-1, SS, B, 5)
         y_pred = y_pred.view(-1, SS, B, 5)
         _coord = y_true[:,:,:,:4]
-        _wh = torch.pow(_coord[:, :, :, 2:4], 2)
+        _wh = torch.pow(_coord[:, :, :, 2:4], 2) * S
         _areas = _wh[:, :, :, 0] * _wh[:, :, :, 1]
         _upleft = _coord[:, :, :, 0:2]
         _bottomright = _upleft + _wh
@@ -46,7 +46,7 @@ class YoloLoss(nn.Module):
 
         # Extract the coordinate prediction from y_pred
         coords = y_pred[:,:,:,:4].contiguous().view(-1, SS, B, 4)
-        wh = torch.pow(coords[:, :, :, 2:4], 2)
+        wh = torch.pow(coords[:, :, :, 2:4], 2) * S
         areas = wh[:, :, :, 0] * wh[:, :, :, 1]
         upleft = coords[:, :, :, 0:2].contiguous()
         bottomright = upleft + wh
@@ -236,8 +236,8 @@ class Model(nn.Module):
                         y /= metadata[i]["scale"]
                         w /= metadata[i]["scale"]
                         h /= metadata[i]["scale"]
-                        w = math.sqrt(w)
-                        h = math.sqrt(h)
+                        w = w
+                        h = h
                         s_x = int(x // (IMAGE_SIZE / S))
                         s_y = int(y // (IMAGE_SIZE / S))
                         b = None
@@ -249,8 +249,8 @@ class Model(nn.Module):
                             continue
                         y_processed[i][s_x][s_y][b][0] = (x % (IMAGE_SIZE / S)) / (IMAGE_SIZE / S)
                         y_processed[i][s_x][s_y][b][1] = (y % (IMAGE_SIZE / S)) / (IMAGE_SIZE / S)
-                        y_processed[i][s_x][s_y][b][2] = w / IMAGE_SIZE
-                        y_processed[i][s_x][s_y][b][3] = h / IMAGE_SIZE
+                        y_processed[i][s_x][s_y][b][2] = math.sqrt(w / IMAGE_SIZE)
+                        y_processed[i][s_x][s_y][b][3] = math.sqrt(h / IMAGE_SIZE)
                         y_processed[i][s_x][s_y][b][4] = 1
 
             y_processed = np.float32(np.asarray(y_processed))
