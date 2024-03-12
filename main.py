@@ -99,9 +99,9 @@ class Model(nn.Module):
 
         self.output_size = 1
 
-        self.nb_epoch = 1000
+        self.nb_epoch = 1
         self.learning_rate = 0.0001
-        self.batch_size = 32
+        self.batch_size = 2
 
         self.model = nn.Sequential(
             nn.Conv2d(3, 64, 7, stride=2, padding=3),
@@ -203,9 +203,7 @@ class Model(nn.Module):
 
         metadata = []
         x_processed = []
-        y_images = []
         for image in x_raw:
-            y_images.append(image[:-4])
             img = cv2.imread(f"data/Images/{image}")
             # Pad the image to make it square before cropping
             # get the max width / height
@@ -230,9 +228,8 @@ class Model(nn.Module):
         y_processed = None
         if y_raw:
             y_processed = np.zeros((len(x_raw), S, S, B, 5))
-            for i, id in enumerate(y_images):
-                datum = y_raw[id]
-                for box in datum["gtboxes"]:
+            for i, id in enumerate(x_raw):
+                for box in y_raw[id[:-4]]["gtboxes"]:
                     if box["tag"] == "person" and not box["extra"].get("ignore"):
                         [x, y, w, h] = box["vbox"]
                         x += metadata[i]["offset_x"]
