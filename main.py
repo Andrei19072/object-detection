@@ -241,7 +241,7 @@ class Model(nn.Module):
                         s_y = int(y // (IMAGE_SIZE / S))
                         b = None
                         for all_b in range(B):
-                            if w > y_processed[i][s_x][s_y][b][2]:
+                            if w > y_processed[i][s_x][s_y][all_b][2]:
                                 b = all_b
                                 break
                         if b is None:
