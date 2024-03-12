@@ -98,8 +98,8 @@ class Model(nn.Module):
         self.output_size = 1
 
         self.nb_epoch = 1000
-        self.learning_rate = 0.001
-        self.batch_size = 32
+        self.learning_rate = 0.0001
+        self.batch_size = 16
 
         self.model = nn.Sequential(
             nn.Conv2d(3, 64, 7, stride=2, padding=3),
@@ -277,7 +277,7 @@ class Model(nn.Module):
             train_loss.backward()
             self.optimiser.step()
 
-            if epoch % 100 == 0:
+            if epoch % 10 == 0:
                 with torch.no_grad():
                     indices = np.random.choice(x_val.shape[0], self.batch_size)
                     x_val_batch = torch.from_numpy(x_val[indices]).cuda()
@@ -354,7 +354,7 @@ def main():
 
     x = []
     y = []
-    image_paths = os.listdir("data/Images")
+    image_paths = os.listdir("data/Images")[:100]
     num_images = len(image_paths)
     print(f"Loading {num_images} images...")
     for i in range(len(image_paths)):
