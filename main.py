@@ -30,8 +30,8 @@ class YoloLoss(nn.Module):
     def forward(self, y_pred, y_true):
         SS = S * S
         scale_object_conf = 1
-        scale_noobject_conf = 2
-        scale_coordinate = 1
+        scale_noobject_conf = 0.5
+        scale_coordinate = 5
         batch_size = y_pred.size(0)
 
         # ground truth
@@ -419,7 +419,7 @@ def test():
 
     x = []
     y = []
-    image_paths = os.listdir("data/Images")[1:2]
+    image_paths = os.listdir("data/Images")[2:3]
     print(image_paths)
     num_images = len(image_paths)
     print(f"Loading {num_images} images...")
