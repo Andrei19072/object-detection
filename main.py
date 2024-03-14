@@ -30,8 +30,8 @@ class YoloLoss(nn.Module):
 
     def forward(self, y_pred, y_true):
         SS = S * S
-        scale_object_conf = 3
-        scale_noobject_conf = 0.5
+        scale_object_conf = 6
+        scale_noobject_conf = 1
         scale_coordinate = 5
         batch_size = y_pred.size(0)
 
@@ -82,7 +82,7 @@ class YoloLoss(nn.Module):
         y_pred = flatten(y_pred)
         p_coords = flatten(coords)
         p_confs = flatten(p_confs)
-        flat_confs = flatten(_confs)
+        #flat_confs = flatten(_confs)
 
         true = torch.cat([coord, confs], 1)
         wght = torch.cat([cooid, conid], 1)
@@ -90,8 +90,8 @@ class YoloLoss(nn.Module):
         loss = torch.pow(pred - true, 2)
         loss = loss * wght
         loss = torch.sum(loss, 1)
-        totals = torch.sum(flat_confs, 1)
-        loss = loss / totals
+        #totals = torch.sum(flat_confs, 1)
+        #loss = loss / totals
         return .5 * torch.mean(loss)
 
 class Model(nn.Module):
@@ -249,7 +249,7 @@ class Model(nn.Module):
                             s_y = 29
                         b = None
                         for all_b in range(B):
-                            if w > y_processed[i][s_x][s_y][all_b][2]:
+                            if w > y_processed[i][s_x][s_y][all_b][2] and w > 20:
                                 b = all_b
                                 break
                         if b is None:
@@ -318,7 +318,7 @@ class Model(nn.Module):
         total_error = 0
         for i in range(len(labels)):
             print(predictions[i], labels[i])
-            total_error += abs(labels[i] - predictions[i]) / labels[i]
+            total_error += abs(labels[i] - predictions[i]) / max(labels[i], 1)
 
         score = total_error / len(labels)
         return score
