@@ -82,6 +82,7 @@ class YoloLoss(nn.Module):
         y_pred = flatten(y_pred)
         p_coords = flatten(coords)
         p_confs = flatten(p_confs)
+        flat_confs = flatten(_confs)
 
         true = torch.cat([coord, confs], 1)
         wght = torch.cat([cooid, conid], 1)
@@ -89,6 +90,8 @@ class YoloLoss(nn.Module):
         loss = torch.pow(pred - true, 2)
         loss = loss * wght
         loss = torch.sum(loss, 1)
+        totals = torch.sum(flat_confs, 1)
+        loss = loss / totals
         return .5 * torch.mean(loss)
 
 class Model(nn.Module):
@@ -314,6 +317,7 @@ class Model(nn.Module):
         labels = self.get_people_in_labels(y, debug=debug)
         total_error = 0
         for i in range(len(labels)):
+            print(predictions[i], labels[i])
             total_error += abs(labels[i] - predictions[i]) / labels[i]
 
         score = total_error / len(labels)
@@ -327,8 +331,8 @@ class Model(nn.Module):
                 for j in range(S):
                     for b in range(B):
                         if label[i][j][b][4] > CONFIDENCE_THRESHHOLD:
-                            if debug:
-                                print(i, j, b, label[i][j][b][4])
+                            #if debug:
+                            #    print(i, j, b, label[i][j][b][4])
                             people += 1
             people_arr[index] = people
         return people_arr
@@ -405,7 +409,7 @@ def test():
     labels = labels | get_labels("data/annotation_train.odgt")
 
     y = labels
-    image_paths = os.listdir("data/Images")[1:]
+    image_paths = os.listdir("data/Images")[:100]
     print(image_paths)
 
     inaccuracy = model.score(image_paths, y, debug=True)
