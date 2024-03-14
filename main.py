@@ -376,13 +376,6 @@ def main():
     x_val = image_paths[int(num_images * 0.8):int(num_images * 0.9)]
     x_test = image_paths[int(num_images * 0.9):]
 
-    # x_train = x[:int(num_images * 0.8)]
-    # y_train = y[:int(num_images * 0.8)]
-    # x_val = x[int(num_images * 0.8):int(num_images * 0.9)]
-    # y_val = y[int(num_images * 0.8):int(num_images * 0.9)]
-    # x_test = x[int(num_images * 0.9):]
-    # y_test = y[int(num_images * 0.9):]
-
     model = Model()
 
     train_losses, val_losses = model.fit(x_train, y, x_val)
@@ -411,20 +404,12 @@ def test():
     labels = labels | get_labels("data/annotation_val.odgt")
     labels = labels | get_labels("data/annotation_train.odgt")
 
-    x = []
-    y = []
-    image_paths = os.listdir("data/Images")[2:3]
+    y = labels
+    image_paths = os.listdir("data/Images")[1:]
     print(image_paths)
-    num_images = len(image_paths)
-    print(f"Loading {num_images} images...")
-    for i in range(len(image_paths)):
-        image = image_paths[i]
-        im = cv2.imread(f"data/Images/{image}")
-        x.append(im)
-        y.append(labels[image[:-4]])
 
-    train_accuracy = model.score(x, y, debug=True)
-    print(f"\nInaccuracy: {round(train_accuracy * 100)}%\n")
+    inaccuracy = model.score(image_paths, y, debug=True)
+    print(f"\nInaccuracy: {round(inaccuracy * 100)}%\n")
 
 
 if __name__ == "__main__":
