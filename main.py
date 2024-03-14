@@ -32,7 +32,7 @@ class YoloLoss(nn.Module):
         SS = S * S
         scale_object_conf = 6
         scale_noobject_conf = 1
-        scale_coordinate = 5
+        scale_coordinate = 0.5
         batch_size = y_pred.size(0)
 
         # ground truth
@@ -75,7 +75,7 @@ class YoloLoss(nn.Module):
             return x.reshape(x.size(0), -1)
 
         # Flatten 'em all
-        confs = flatten(confs)
+        confs = flatten(_confs)
         conid = flatten(conid)
         coord = flatten(_coord)
         cooid = flatten(cooid)
@@ -84,11 +84,11 @@ class YoloLoss(nn.Module):
         p_confs = flatten(p_confs)
         #flat_confs = flatten(_confs)
 
-        true = torch.cat([coord, confs], 1)
-        wght = torch.cat([cooid, conid], 1)
-        pred = torch.cat([p_coords, p_confs], 1)
+        true = torch.cat([confs], 1)
+        wght = torch.cat([conid], 1)
+        pred = torch.cat([p_confs], 1)
         loss = torch.pow(pred - true, 2)
-        loss = loss * wght
+        #loss = loss * wght
         loss = torch.sum(loss, 1)
         #totals = torch.sum(flat_confs, 1)
         #loss = loss / totals
@@ -102,7 +102,7 @@ class Model(nn.Module):
 
         self.output_size = 1
 
-        self.nb_epoch = 1000
+        self.nb_epoch = 200
         self.learning_rate = 0.0001
         self.batch_size = 32
 
@@ -350,7 +350,7 @@ def save_model(trained_model):
 
 
 def load_model():
-    with open("model.pickle", "rb") as target:
+    with open("model_2.pickle", "rb") as target:
         if device == "cuda":
             trained_model = pickle.load(target)
         else:
