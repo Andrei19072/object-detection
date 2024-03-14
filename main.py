@@ -21,7 +21,7 @@ from torch.autograd import Variable
 IMAGE_SIZE = 448
 S = 30
 B = 1
-CONFIDENCE_THRESHHOLD = 0.5
+CONFIDENCE_THRESHHOLD = 0.05
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 class YoloLoss(nn.Module):
@@ -409,11 +409,11 @@ def test():
     labels = labels | get_labels("data/annotation_train.odgt")
 
     y = labels
-    image_paths = os.listdir("data/Images")[:100]
+    image_paths = ["IMG_0169.jpg"]
     print(image_paths)
 
-    inaccuracy = model.score(image_paths, y, debug=True)
-    print(f"\nInaccuracy: {round(inaccuracy * 100)}%\n")
+    prediction = model.predict(image_paths)
+    print(f"Prediction: {prediction}")
 
 
 if __name__ == "__main__":
