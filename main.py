@@ -20,7 +20,7 @@ from torch.autograd import Variable
 
 IMAGE_SIZE = 448
 S = 30
-B = 2
+B = 1
 CONFIDENCE_THRESHHOLD = 0.5
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -30,7 +30,7 @@ class YoloLoss(nn.Module):
 
     def forward(self, y_pred, y_true):
         SS = S * S
-        scale_object_conf = 1
+        scale_object_conf = 3
         scale_noobject_conf = 0.5
         scale_coordinate = 5
         batch_size = y_pred.size(0)
